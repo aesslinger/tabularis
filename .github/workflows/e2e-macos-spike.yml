@@ -83,7 +83,9 @@ jobs:
           done
 
       - name: Run WebDriverIO E2E test (real WKWebView + real IPC)
-        run: pnpm wdio run wdio.conf.ts
+        # Use `pnpm exec wdio` (not `pnpm wdio ...`) so pnpm doesn't append the
+        # args to the package.json script and double them up.
+        run: pnpm exec wdio run wdio.conf.ts
 
       - name: Upload logs on failure
         if: failure()
