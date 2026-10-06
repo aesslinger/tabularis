@@ -83,9 +83,10 @@ jobs:
           done
 
       - name: Run WebDriverIO E2E test (real WKWebView + real IPC)
-        # Use `pnpm exec wdio` (not `pnpm wdio ...`) so pnpm doesn't append the
-        # args to the package.json script and double them up.
-        run: pnpm exec wdio run wdio.conf.ts
+        # Invoke the wdio binary by explicit path. spike/e2e has its own
+        # pnpm-workspace.yaml so node_modules/.bin/wdio is installed locally
+        # (otherwise the tabularis repo-root workspace would hoist it away).
+        run: ./node_modules/.bin/wdio run wdio.conf.ts
 
       - name: Upload logs on failure
         if: failure()
