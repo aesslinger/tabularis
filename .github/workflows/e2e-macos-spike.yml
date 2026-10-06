@@ -1,0 +1,96 @@
+# Spike: drive a NATIVE Tauri app (real WKWebView + real Tauri IPC) on a free,
+# unattended GitHub-hosted macOS runner, using tauri-webdriver.
+#
+# This is a THROWAWAY spike (Option A). It builds and tests a self-contained
+# minimal Tauri app under spike/e2e/ — it does NOT build or modify tabularis
+# itself. The goal is to prove the full chain that catches the PR #822
+# frontend->backend database-routing bug class can run on macOS CI without a
+# local machine. If green, the follow-up (Option B) wires the same chain into
+# the real tabularis app behind an e2e-testing feature flag.
+#
+# On-demand ONLY: never runs on push/PR, so it has zero impact on normal CI.
+# Trigger via the Actions tab ("E2E macOS spike" -> Run workflow).
+name: E2E macOS spike
+
+concurrency:
+  group: e2e-macos-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  native-macos:
+    runs-on: macos-14
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: spike/e2e
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            spike/e2e/src-tauri/target
+          key: spike-cargo-macos-14-${{ hashFiles('spike/e2e/src-tauri/Cargo.lock', 'spike/e2e/src-tauri/Cargo.toml') }}
+          restore-keys: spike-cargo-macos-14-
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install tauri-wd CLI (WebDriver server)
+        run: cargo install tauri-webdriver-automation --version 0.1.3 --locked
+
+      - name: Build Tauri debug binary (includes in-app WebDriver plugin)
+        run: pnpm tauri build --debug --no-bundle
+
+      - name: Start Vite dev server (frontend for the debug binary)
+        run: |
+          pnpm dev --port 1420 --host 127.0.0.1 &
+          for i in $(seq 1 60); do
+            if curl -s http://127.0.0.1:1420 >/dev/null 2>&1; then
+              echo "Vite up on :1420"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Start tauri-wd (W3C WebDriver server on :4444)
+        run: |
+          tauri-wd --port 4444 &
+          for i in $(seq 1 60); do
+            if curl -s http://127.0.0.1:4444/status >/dev/null 2>&1; then
+              echo "tauri-wd up on :4444"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run WebDriverIO E2E test (real WKWebView + real IPC)
+        run: pnpm wdio run wdio.conf.ts
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-spike-logs
+          path: |
+            spike/e2e/wdio.log
+            spike/e2e/logs
+          if-no-files-found: ignore

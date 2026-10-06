@@ -1,0 +1,5 @@
+# Spike build artifacts — not committed.
+node_modules
+dist
+logs
+*.log
