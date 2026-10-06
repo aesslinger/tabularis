@@ -35,9 +35,9 @@ jobs:
           node-version: 22
 
       - name: Install pnpm
+        # version is resolved from package.json's packageManager field; do not
+        # set `version` here or action-setup conflicts with it.
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
