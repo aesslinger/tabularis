@@ -7,8 +7,11 @@
 // WKWebView -> real invoke() -> real Rust command -> DOM assertion.
 describe("native IPC spike", () => {
   it("clicks a button that invokes a real Rust command and renders its result", async () => {
-    await browser.url("/");
+    // A Tauri app is not a navigable URL — the webview already loaded the
+    // frontend from the devUrl/Vite server at launch. Interact directly; do
+    // NOT call browser.url(...). Wait for the button to be ready, then click.
     const button = await $("[data-testid='btn-ping-real-backend']");
+    await button.waitForExist({ timeout: 10000 });
     await button.click();
     const result = await $("[data-testid='pong-result']");
     await browser.waitUntil(
